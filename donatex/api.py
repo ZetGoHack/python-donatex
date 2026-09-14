@@ -4,7 +4,7 @@ BASE_API_URL = "https://donatex.gg/api/"
 
 
 class Api:
-    """DonateX API"""
+    """DonateX API - формирует API запросы, парсит ответы в рабочие классы"""
 
     def __init__(self, transport: Transport, base_url: str = BASE_API_URL):
         self._transport = transport

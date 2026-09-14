@@ -19,14 +19,14 @@ class ExternalTokenAuth(AuthStrategy):
         return self.token
 
 
-# class OAuthConfidentialAuth(AuthStrategy):
-#     _TYPE = "OAUTH_CONF"
-#     def __init__(self, client_id, client_secret): ...
-#     async def authorize(self): ...
-#     async def get_access_token(self) -> str:
-#         if self._expired():
-#             await self.refresh()
-#         return self._access_token
+class OAuthConfidentialAuth(AuthStrategy):
+    _TYPE = "OAUTH_CONF"
+    def __init__(self, client_id, client_secret): ...
+    async def authorize(self): ...
+    async def get_access_token(self) -> str:
+        if self._expired():
+            await self.refresh()
+        return self._access_token
 
 
 class OAuthPublicAuth(AuthStrategy):
@@ -39,6 +39,6 @@ class OAuthPublicAuth(AuthStrategy):
 
 AuthType = (
     ExternalTokenAuth |
-    # OAuthConfidentialAuth |
+    OAuthConfidentialAuth |
     OAuthPublicAuth
 )
