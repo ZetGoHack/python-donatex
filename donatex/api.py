@@ -13,6 +13,9 @@ class Api:
     async def _connect(self):
         return await self._transport.start()
 
+    async def _disconnect(self):
+        return await self._transport.stop()
+
     async def _send_request(self, endpoint: str, method: str):
         pass
 

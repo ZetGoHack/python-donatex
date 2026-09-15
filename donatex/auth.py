@@ -3,27 +3,38 @@ import time
 from abc import ABC, abstractmethod
 
 
+class AuthState:
+    """TODO"""
+
 class AuthStrategy(ABC):
     _TYPE = "BASE"
+    def __init__(self):
+        super().__init__()
+        self._access_token = None
 
     @abstractmethod
     async def get_access_token(self) -> str: ...
+
+    def is_authorized(self) -> bool:
+        return bool(self._access_token)
 
 
 class ExternalTokenAuth(AuthStrategy):
     _TYPE = "EXTERNAL"
 
     def __init__(self, token: str):
-        self.token = token
+        self._access_token = token
 
     async def get_access_token(self) -> str:
-        return self.token
+        return self._access_token
 
 
 class OAuthConfidentialAuth(AuthStrategy): # TODO
     _TYPE = "OAUTH_CONF"
 
-    def __init__(self, client_id, client_secret): ...
+    def __init__(self, client_id, client_secret):
+        super().__init__()
+
     async def authorize(self): ...
     async def refresh(self): ...
     async def get_access_token(self) -> str:
@@ -31,17 +42,23 @@ class OAuthConfidentialAuth(AuthStrategy): # TODO
             await self.refresh()
         return self._access_token
 
+    async def _expired(self): ...
+
 
 class OAuthPublicAuth(AuthStrategy): # TODO
     _TYPE = "OAUTH_PUB"
 
-    def __init__(self, client_id): ...
+    def __init__(self, client_id):
+        super().__init__()
+
     async def authorize(self): ...
     async def refresh(self): ...
     async def get_access_token(self) -> str:
         if self._expired():
             self.refresh()
         return self._access_token
+
+    async def _expired(self): ...
 
 
 AuthType = ExternalTokenAuth | OAuthConfidentialAuth | OAuthPublicAuth

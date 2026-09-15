@@ -10,7 +10,9 @@ class Transport:
         self._client = None
 
     async def start(self):
-        # token = await self._auth.get_access_token() # TODO: логика авторизации и подстановки токена для начальной настройки
+        # TODO: логика авторизации и подстановки токена для начальной настройки
+        if not self._auth.is_authorized():
+            return
         headers = {
             "Content-Type": "application/json",
         }
@@ -19,6 +21,9 @@ class Transport:
         return self.is_ready
 
     async def stop(self):
+        if self._client:
+            await self._client.aclose()
+
         self._client = None
         self.is_ready = False
 
@@ -27,6 +32,8 @@ class Transport:
         return {
             "Authorization": f"Bearer {token}",
         }
+
+    # TODO: мб гейтинг для is_ready
 
     async def _get(self, endpoint: str, **kwargs):
         pass

@@ -65,6 +65,12 @@ class Client:
 
         return True
 
+    async def disconnect(self):
+        """Отключить клиент"""
+        await self._api._disconnect()
+
+        self._connected = False
+
     async def start(self):
         """Запустить клиент
 
@@ -80,6 +86,8 @@ class Client:
     async def stop(self):
         if not self._connected:
             raise ConnectionError("Клиент уже остановлен")
+
+        await self.disconnect()
         return
 
     async def authorize(self):
