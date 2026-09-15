@@ -2,6 +2,7 @@ from .api import Api
 from .auth import ExternalTokenAuth, OAuthConfidentialAuth, OAuthPublicAuth
 from .errors import AuthConfigError
 from .types import TokenScope
+from .utils import validate_scopes
 from ._transport import Transport
 
 
@@ -24,6 +25,7 @@ class Client:
         token_scopes (``set[TokenScope]``):
             Scopes access-токена, запрашиваемые при авторизации.
             Используется только в связке с ``OAuth`` авторизацией 
+            Дефолт: ``{"openid", "offline_access", "donations.read"}``
 
     """
 
@@ -32,18 +34,20 @@ class Client:
         api_token: str = None,
         client_id: str = None,
         client_secret: str = None,
-        token_scopes: frozenset[TokenScope] = set(),
+        token_scopes: set[TokenScope] = set({"openid", "offline_access", "donations.read"}),
     ):
         self._connected = False
+
+        validate_scopes(token_scopes)
 
         if api_token:
             self._auth = ExternalTokenAuth(api_token)
         elif client_id and client_secret:
-            self._auth = OAuthConfidentialAuth(client_id, client_secret)
+            self._auth = OAuthConfidentialAuth(client_id, client_secret, scopes=token_scopes)
         elif client_id:
-            self._auth = OAuthPublicAuth(client_id)
+            self._auth = OAuthPublicAuth(client_id, scopes=token_scopes)
         else:
-            raise AuthConfigError("")  # TODO
+            raise AuthConfigError("Не было указано достаточно аргументов для выбора авторизации")
 
         self._transport = Transport(self._auth)
         self._api = Api(self._transport)
@@ -53,15 +57,25 @@ class Client:
 
     # region Public Methods
 
-    async def connect(self):
+    async def connect(self) -> bool:
         """Подключить клиент"""
+        await self._api._connect() # TODO
+
+        self._connected = True
+
+        return True
 
     async def start(self):
         """Запустить клиент
 
         Этот метод запускает транспорт и, по необходимости, запрашивает авторизацию (если указаны OAuth ключи)
         """
-        return self
+        if await self.connect():
+            return self
+
+        # TODO: флоу авторизации
+
+        
 
     async def stop(self):
         if not self._connected:

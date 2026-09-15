@@ -1,5 +1,11 @@
-class TokenExpired(Exception):
+class TokenExpiredError(Exception):
     """Is being raised when OAuth token is expired"""
 
 class AuthConfigError(Exception):
     """Is being raised when the authorization configuration is incorrect or incomplete."""
+
+class ApiError(Exception):
+    """Is being raised when API threw an error"""
+
+class InvalidScopeError(Exception):
+    """Is being raised when the specified scopes are invalid"""

@@ -8,6 +8,10 @@ class Api:
 
     def __init__(self, transport: Transport, base_url: str = BASE_API_URL):
         self._transport = transport
+        self._api_url = base_url
+
+    async def _connect(self):
+        return await self._transport.start()
 
     async def _send_request(self, endpoint: str, method: str):
         pass
