@@ -1,6 +1,7 @@
 import httpx
 
 from .auth import AuthType
+from .errors import ApiError, TransportNotReadyError
 
 
 class Transport:
@@ -12,7 +13,7 @@ class Transport:
     async def start(self):
         # TODO: логика авторизации и подстановки токена для начальной настройки
         if not self._auth.is_authorized():
-            return
+            raise NotImplementedError()
         headers = {
             "Content-Type": "application/json",
         }
@@ -35,9 +36,52 @@ class Transport:
 
     # TODO: мб гейтинг для is_ready
 
-    async def _get(self, endpoint: str, **kwargs):
-        pass
+    async def _get(self, url: str, **kwargs):
+        if not self.is_ready:
+            raise TransportNotReadyError(
+                "Транспорт не готов вызывать запросы к API"
+            )
+        headers = await self._get_headers()
 
-    async def _post(self, endpoint: str, **kwargs):
-        pass
+        resp = await self._client.get(url, headers=headers, **kwargs)
+        if resp.status_code != 200:
+            raise ApiError(
+                resp.text
+            )
+        raw = resp.json()
 
+        return raw
+
+    async def _post(self, url: str, **kwargs):
+        if not self.is_ready:
+            raise TransportNotReadyError(
+                "Транспорт не готов вызывать запросы к API"
+            )
+        headers = await self._get_headers()
+
+        resp = await self._client.post(url, headers=headers, **kwargs)
+        if resp.status_code not in (200, 204):
+            raise ApiError(
+                resp.text
+            )
+        if resp.status_code == 204:
+            return None
+
+        raw = resp.json()
+
+        return raw
+
+    async def _delete(self, url: str, **kwargs):
+        if not self.is_ready:
+            raise TransportNotReadyError(
+                "Транспорт не готов вызывать запросы к API"
+            )
+        headers = await self._get_headers()
+
+        resp = await self._client.delete(url, headers=headers, **kwargs)
+        if resp.status_code != 204:
+            raise ApiError(
+                resp.text
+            )
+
+        return None

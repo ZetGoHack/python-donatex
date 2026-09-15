@@ -1,6 +1,6 @@
 [project]
 name = "donatex"
-version = "0.0.1"
+version = "0.0.4"
 
 [build-system]
 requires = ["setuptools"]

@@ -9,3 +9,6 @@ class ApiError(Exception):
 
 class InvalidScopeError(Exception):
     """Is being raised when the specified scopes are invalid"""
+
+class TransportNotReadyError(Exception):
+    """Is being raised when transport was not properly started"""

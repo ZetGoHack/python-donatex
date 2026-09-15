@@ -81,6 +81,10 @@ class Client:
 
         # TODO: флоу авторизации
 
+
+    async def get_me(self):
+        return await self._api.get_me()
+
         
 
     async def stop(self):

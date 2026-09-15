@@ -1,5 +1,7 @@
 import typing
 
+from dataclasses import dataclass
+
 TokenScope = typing.Literal[
     "donations.read",       # Чтение истории донатов, топа донатеров и активной цели авторизованного стримера.
     "donations.write",      # Отправка тестовых донатов на свой канал через /v1/test-donation.
@@ -9,3 +11,17 @@ TokenScope = typing.Literal[
     "openid",               # OIDC идентификатор пользователя.
     "profile",              # Имя пользователя и аватарка.
 ]
+
+@dataclass
+class User:
+    id: str
+    username: str
+    avatar_url: str
+
+    @staticmethod
+    def _parse(raw: dict):
+        return User(
+            id=raw["id"],
+            username=raw["username"],
+            avatar_url=raw["avatarUrl"],
+        )
