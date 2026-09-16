@@ -1,4 +1,4 @@
-from .types import User
+from . import types, errors
 from ._transport import Transport
 
 BASE_API_URL = "https://donatex.gg/api"
@@ -11,17 +11,56 @@ class Api:
         self._transport = transport
         self._api_url = base_url
 
-
     # region Public Methods
 
-
-    async def get_me(self) -> User:
+    async def get_me(self) -> types.User:
         raw = await self._send_request("/v1/user/me", "GET")
 
-        result = User._parse(raw)
+        result = types.User._parse(raw)
 
         return result
 
+    async def get_donations(
+        self,
+        offset: int,
+        limit: int,
+        query: str | None = None,
+        hide_test: bool | None = None,
+        period: types.PeriodScope | None = None,
+        custom_period: types.CustomPeriod | None = None,
+        sort_order: types.SortScope | None = None,
+    ):
+        data = {
+            "skip": offset,
+            "take": limit,
+        }
+
+        if query is not None:
+            data["query"] = query
+
+        if hide_test is not None:
+            data["hideTest"] = hide_test
+
+        if period is not None:
+            if custom_period is None:
+                data["period"] = period
+            else:
+                raise errors.ArgumentsConflictError(
+                    "Указаны конфликтующие аргументы:"
+                    " `period` и `custom_period` не могут быть указаны одновременно"
+                )
+
+        if custom_period is not None:
+            data.update(custom_period.to_params())
+
+        if sort_order is not None:
+            data["sortOrder"] = sort_order
+
+        raw: list[dict] = await self._send_request("/v1/donations", "GET", data=data)
+
+        # TODO: Donation class
+
+        return raw
 
     # endregion
 
@@ -54,5 +93,3 @@ class Api:
             raise ValueError(f"Unknown method: {method}")
 
         return result
-
-

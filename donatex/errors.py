@@ -12,3 +12,9 @@ class InvalidScopeError(Exception):
 
 class TransportNotReadyError(Exception):
     """Is being raised when transport was not properly started"""
+
+class FloodWaitError(Exception):
+    """Is being raised when api returned 429 Too many requests"""
+
+class ArgumentsConflictError(Exception):
+    """Is being raised when incompatible arguments are entered"""
