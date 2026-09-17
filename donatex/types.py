@@ -37,11 +37,20 @@ class CustomPeriod:
     start_date: datetime.datetime
     end_date: datetime.datetime
 
+    def __post_init__(self):
+        if bool(self.start_date.tzinfo) != bool(self.end_date.tzinfo):
+            raise ValueError(
+                "start_date и end_date должны быть одновременно "
+                "либо aware, либо naive datetime"
+            )
+        if self.start_date >= self.end_date:
+            raise ValueError("start_date должен не быть позже end_date")
+
     @staticmethod
     def fmt(dt: datetime.datetime) -> str:
         if dt.tzinfo is not None:
             dt = dt.astimezone(datetime.timezone.utc)
-        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return dt.strftime("%Y-%m-%d")
 
     def to_params(self) -> dict:
         return {
@@ -64,4 +73,47 @@ class User:
             username=raw["username"],
             avatar_url=raw["avatarUrl"],
             raw=raw,
+        )
+
+
+@dataclass
+class Donation: # TODO: Переработка атрибутов
+    id: str
+    username: str
+    message: str
+    with_AI_response: bool
+    music_link: str | None
+    currency: str
+    amount: float
+    amount_in_rub: float
+    timestamp: datetime.datetime
+    ai_response: str | None
+    ai_response_voice_file_path: str | None
+    was_shown: bool
+    is_test: bool
+    is_potentially_unsafe: bool
+    is_fee_paid_by_user: bool
+    voice_file_path: str
+    paid_voice: str
+
+    @staticmethod
+    def _parse(raw: dict) -> Donation:
+        return Donation(
+            id=raw["id"],
+            username=raw["username"],
+            message=raw["message"],
+            with_AI_response=raw["withAIResponse"],
+            music_link=raw.get("musicLink", None),
+            currency=raw["currency"],
+            amount=raw["amount"],
+            amount_in_rub=raw["amountInRub"],
+            timestamp=datetime.datetime.fromisoformat(raw["timestamp"]),
+            ai_response=raw["aiResponse"],
+            ai_response_voice_file_path=raw["aiResponseVoiceFilePath"],
+            was_shown=raw["wasShown"],
+            is_test=raw["isTest"],
+            is_potentially_unsafe=raw["isPotentiallyUnsafe"],
+            is_fee_paid_by_user=raw["isFeePaidByUser"],
+            voice_file_path=raw["voiceFilePath"],
+            paid_voice=raw["paidVoice"],
         )

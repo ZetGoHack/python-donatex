@@ -3,6 +3,8 @@ from ._transport import Transport
 
 BASE_API_URL = "https://donatex.gg/api"
 
+_GET_DONATIONS_LIMIT_MAX = 100
+
 
 class Api:
     """DonateX API - формирует API запросы, парсит ответы в рабочие классы"""
@@ -29,11 +31,9 @@ class Api:
         period: types.PeriodScope | None = None,
         custom_period: types.CustomPeriod | None = None,
         sort_order: types.SortScope | None = None,
-    ):
-        data = {
-            "skip": offset,
-            "take": limit,
-        }
+        auto_paginate: bool = False,
+    ) -> list[types.Donation]:
+        data = {}
 
         if query is not None:
             data["query"] = query
@@ -56,11 +56,24 @@ class Api:
         if sort_order is not None:
             data["sortOrder"] = sort_order
 
-        raw: list[dict] = await self._send_request("/v1/donations", "GET", data=data)
+        raw_results: list[dict] = []
+        current_offset = offset
+        remaining = limit
 
-        # TODO: Donation class
+        while remaining > 0: # TODO: Учёт ограничений API (10 запросов/сек, 600 запросов/мин, 10000 запросов/час)
+            take = min(_GET_DONATIONS_LIMIT_MAX, remaining)
+            page_data = {**data, "skip": current_offset, "take": take}
 
-        return raw
+            page: list[dict] = await self._send_request("/v1/donations", "GET", data=page_data)
+            raw_results.extend(page)
+
+            if not auto_paginate or len(page) < take:
+                break
+
+            current_offset += take
+            remaining -= take
+
+        return [types.Donation._parse(raw) for raw in raw_results]
 
     # endregion
 

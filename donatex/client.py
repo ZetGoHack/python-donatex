@@ -1,5 +1,3 @@
-import typing
-
 from .api import Api
 from .auth import ExternalTokenAuth, OAuthConfidentialAuth, OAuthPublicAuth
 from .errors import AuthConfigError
@@ -24,9 +22,11 @@ class Client:
             OAuth Secret конфиденциального клиента
             Используется только в связке с ``client_id``
 
-        token_scopes (``set[TokenScope]``):
+        token_scopes (``frozenset[str]``):
             Scopes access-токена, запрашиваемые при авторизации.
-            Используется только в связке с ``OAuth`` авторизацией
+            Используется только в связке с ``OAuth`` авторизацией.
+            Список из: ``"donations.read"``, ``"donations.write"``, ``"user.read"``, 
+            ``"donations.subscribe"``, ``"offline_access"``, ``"openid"``, ``"profile"``
             Дефолт: ``{"openid", "offline_access", "donations.read"}``
 
     """
@@ -107,7 +107,39 @@ class Client:
         period: types.PeriodScope | None = None,
         custom_period: types.CustomPeriod | None = None,
         sort_order: types.SortScope | None = None,
+
+        auto_paginate: bool = False,
     ):
+        """Поиск, фильтрация по периоду и пагинация донатов стримера. По умолчанию возвращаются все донаты от новых к старым.
+        
+        Parameters:
+            offset (``int``):
+                Смещение 
+            
+            limit (``int``):
+                Количество записей. До 100 результатов за запрос. Можно указать больше с
+                ``auto_paginate=True`` 
+            
+            query (``str``, *optional*):
+                Поиск по тексту сообщения или нику
+            
+            hide_test (``bool``, *optional*):
+                Скрыть тестовые донаты
+            
+            period (``str``, *optional*):
+                Период выборки. Один из: ``"Day"``, ``"Week"``, ``"Month"``, ``"AllTime"``,
+                ``"CurrentStream"``, ``"Last24Hours"``, ``"Last7Days"``, ``"Last30Days"``,
+                ``"CurrentYear"``, ``"Last365Days"``. Конфликтует с ``custom_period``
+            
+            custom_period (:class:`~donatex.types.CustomPeriod`):
+                Свой период выборки с указанной начальной и конечной UTC датой.
+                Время не учитывается
+
+            sort_order (``str``, *optional*):
+                Порядок сортировки. Один из: ``"NewestFirst"``, ``"OldestFirst"``
+            
+            auto_paginate (``bool``, *optional*):
+                Автоматическая пагинация с получением ``limit`` объектов"""
         return await self._invoke(
             self._api.get_donations(
                 offset=offset,
@@ -117,6 +149,7 @@ class Client:
                 period=period,
                 custom_period=custom_period,
                 sort_order=sort_order,
+                auto_paginate=auto_paginate,
             )
         )
 
