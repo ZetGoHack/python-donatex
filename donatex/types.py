@@ -97,7 +97,7 @@ class Donation: # TODO: Переработка атрибутов
     paid_voice: str
 
     @staticmethod
-    def _parse(raw: dict) -> Donation:
+    def _parse(raw: dict):
         return Donation(
             id=raw["id"],
             username=raw["username"],
