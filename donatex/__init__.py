@@ -2,6 +2,6 @@
 
 __author__ = "ZetGoHack"
 __license__ = "MIT"
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 
 from .client import Client
