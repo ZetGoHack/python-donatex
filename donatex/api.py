@@ -41,10 +41,15 @@ class ApiLimiter:
 class Api:
     """DonateX API - формирует API запросы, парсит ответы в рабочие классы"""
 
-    def __init__(self, transport: Transport, base_url: str = BASE_API_URL):
+    def __init__(
+        self,
+        transport: Transport,
+        base_url: str = BASE_API_URL,
+        limiter: ApiLimiter | None = None,
+    ):
         self._transport = transport
         self._api_url = base_url
-        self._api_limiter = ApiLimiter()
+        self._api_limiter = limiter or ApiLimiter()
 
     # region Public Methods
 
@@ -97,7 +102,9 @@ class Api:
             take = min(_GET_DONATIONS_LIMIT_MAX, remaining)
             page_data = {**data, "skip": current_offset, "take": take}
 
-            page: list[dict] = await self._send_request("/v1/donations", "GET", data=page_data)
+            page: list[dict] = await self._send_request(
+                "/v1/donations", "GET", data=page_data
+            )
             raw_results.extend(page)
 
             if not auto_paginate or len(page) < take:
