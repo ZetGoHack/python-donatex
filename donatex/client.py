@@ -29,6 +29,10 @@ class Client:
             ``"donations.subscribe"``, ``"offline_access"``, ``"openid"``, ``"profile"``
             Дефолт: ``{"openid", "offline_access", "donations.read"}``
 
+        proxy (``str``, *optional*):
+            Прокси для HTTP-транспорта (например ``"http://user:pass@host:port"``).
+            По умолчанию клиент не читает системные настройки прокси
+
     """
 
     def __init__(
@@ -39,6 +43,7 @@ class Client:
         token_scopes: set[types.TokenScope] = set(
             {"openid", "offline_access", "donations.read"}
         ),
+        proxy: str | None = None,
     ):
         self._connected = False
 
@@ -57,7 +62,7 @@ class Client:
                 "Не было указано достаточно аргументов для выбора авторизации"
             )
 
-        self._transport = Transport(self._auth)
+        self._transport = Transport(self._auth, proxy=proxy)
         self._api = Api(self._transport)
 
     async def _invoke(self, api_method):
