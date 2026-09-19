@@ -52,7 +52,7 @@ class OAuthConfidentialAuth(AuthStrategy):  # TODO
     async def authorize(self): ...
     async def refresh(self): ...
     async def get_access_token(self) -> str:
-        if self._expired():
+        if await self._expired():
             await self.refresh()
         return self._access_token
 
@@ -76,8 +76,8 @@ class OAuthPublicAuth(AuthStrategy):  # TODO
     async def authorize(self): ...
     async def refresh(self): ...
     async def get_access_token(self) -> str:
-        if self._expired():
-            self.refresh()
+        if await self._expired():
+            await self.refresh()
         return self._access_token
 
     async def _expired(self): ...

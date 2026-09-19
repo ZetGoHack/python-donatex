@@ -59,6 +59,20 @@ def test_custom_period_rejects_mixed_aware_and_naive():
             ),
             "2026-03-05",
         ),
+        (
+            datetime.datetime(
+                2026, 3, 5, 2, 0,
+                tzinfo=datetime.timezone(datetime.timedelta(hours=5)),
+            ),
+            "2026-03-04",
+        ),
+        (
+            datetime.datetime(
+                2026, 3, 5, 23, 0,
+                tzinfo=datetime.timezone(datetime.timedelta(hours=-5)),
+            ),
+            "2026-03-06",
+        ),
     ],
 )
 def test_custom_period_fmt_converts_to_utc_date(dt, expected):
