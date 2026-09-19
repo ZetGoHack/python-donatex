@@ -8,6 +8,12 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
