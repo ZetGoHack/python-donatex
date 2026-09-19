@@ -2,12 +2,17 @@ import time
 
 from abc import ABC, abstractmethod
 
+from .errors import AuthConfigError
+from .utils import validate_scopes
+
 
 class AuthState:
     """TODO"""
 
+
 class AuthStrategy(ABC):
     _TYPE = "BASE"
+
     def __init__(self):
         super().__init__()
         self._access_token = None
@@ -29,11 +34,20 @@ class ExternalTokenAuth(AuthStrategy):
         return self._access_token
 
 
-class OAuthConfidentialAuth(AuthStrategy): # TODO
+class OAuthConfidentialAuth(AuthStrategy):  # TODO
     _TYPE = "OAUTH_CONF"
 
-    def __init__(self, client_id, client_secret):
+    def __init__(self, client_id, client_secret, scopes=None):
         super().__init__()
+        scopes = scopes or frozenset()
+        validate_scopes(scopes)
+        if not scopes:
+            raise AuthConfigError(
+                "Не указано ни одного scope. Токен без scopes не имеет смысла"
+            )
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._scopes = scopes
 
     async def authorize(self): ...
     async def refresh(self): ...
@@ -45,11 +59,19 @@ class OAuthConfidentialAuth(AuthStrategy): # TODO
     async def _expired(self): ...
 
 
-class OAuthPublicAuth(AuthStrategy): # TODO
+class OAuthPublicAuth(AuthStrategy):  # TODO
     _TYPE = "OAUTH_PUB"
 
-    def __init__(self, client_id):
+    def __init__(self, client_id, scopes=None):
         super().__init__()
+        scopes = scopes or frozenset()
+        validate_scopes(scopes)
+        if not scopes:
+            raise AuthConfigError(
+                "Не указано ни одного scope. Токен без scopes не имеет смысла"
+            )
+        self._client_id = client_id
+        self._scopes = scopes
 
     async def authorize(self): ...
     async def refresh(self): ...

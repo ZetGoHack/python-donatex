@@ -2,7 +2,6 @@ from .api import Api
 from .auth import ExternalTokenAuth, OAuthConfidentialAuth, OAuthPublicAuth
 from .errors import AuthConfigError
 from . import types
-from .utils import validate_scopes
 from ._transport import Transport
 
 
@@ -25,7 +24,7 @@ class Client:
         token_scopes (``frozenset[str]``):
             Scopes access-токена, запрашиваемые при авторизации.
             Используется только в связке с ``OAuth`` авторизацией.
-            Список из: ``"donations.read"``, ``"donations.write"``, ``"user.read"``, 
+            Список из: ``"donations.read"``, ``"donations.write"``, ``"user.read"``,
             ``"donations.subscribe"``, ``"offline_access"``, ``"openid"``, ``"profile"``
             Дефолт: ``{"openid", "offline_access", "donations.read"}``
 
@@ -46,8 +45,6 @@ class Client:
         proxy: str | None = None,
     ):
         self._connected = False
-
-        validate_scopes(token_scopes)
 
         if api_token:
             self._auth = ExternalTokenAuth(api_token)
@@ -112,37 +109,36 @@ class Client:
         period: types.PeriodScope | None = None,
         custom_period: types.CustomPeriod | None = None,
         sort_order: types.SortScope | None = None,
-
         auto_paginate: bool = False,
     ):
         """Поиск, фильтрация по периоду и пагинация донатов стримера. По умолчанию возвращаются все донаты от новых к старым.
-        
+
         Parameters:
             offset (``int``):
-                Смещение 
-            
+                Смещение
+
             limit (``int``):
                 Количество записей. До 100 результатов за запрос. Можно указать больше с
-                ``auto_paginate=True`` 
-            
+                ``auto_paginate=True``
+
             query (``str``, *optional*):
                 Поиск по тексту сообщения или нику
-            
+
             hide_test (``bool``, *optional*):
                 Скрыть тестовые донаты
-            
+
             period (``str``, *optional*):
                 Период выборки. Один из: ``"Day"``, ``"Week"``, ``"Month"``, ``"AllTime"``,
                 ``"CurrentStream"``, ``"Last24Hours"``, ``"Last7Days"``, ``"Last30Days"``,
                 ``"CurrentYear"``, ``"Last365Days"``. Конфликтует с ``custom_period``
-            
+
             custom_period (:class:`~donatex.types.CustomPeriod`):
                 Свой период выборки с указанной начальной и конечной UTC датой.
                 Время не учитывается
 
             sort_order (``str``, *optional*):
                 Порядок сортировки. Один из: ``"NewestFirst"``, ``"OldestFirst"``
-            
+
             auto_paginate (``bool``, *optional*):
                 Автоматическая пагинация с получением ``limit`` объектов"""
         return await self._invoke(
