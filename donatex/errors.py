@@ -4,6 +4,9 @@ class TokenExpiredError(Exception):
 class AuthConfigError(Exception):
     """Is being raised when the authorization configuration is incorrect or incomplete."""
 
+class AuthRequiredError(Exception):
+    """Is being raised when a request needs a valid access token that hasn't been obtained yet (e.g. OAuth authorize() wasn't called)"""
+
 class ApiError(Exception):
     """Is being raised when API threw an error"""
 

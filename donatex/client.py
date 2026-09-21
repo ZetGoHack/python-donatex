@@ -1,6 +1,6 @@
 from .api import Api
 from .auth import ExternalTokenAuth, OAuthConfidentialAuth, OAuthPublicAuth
-from .errors import AuthConfigError
+from . import errors
 from . import types
 from ._transport import Transport
 
@@ -55,11 +55,12 @@ class Client:
         elif client_id:
             self._auth = OAuthPublicAuth(client_id, scopes=token_scopes)
         else:
-            raise AuthConfigError(
+            raise errors.AuthConfigError(
                 "Не было указано достаточно аргументов для выбора авторизации"
             )
 
         self._transport = Transport(self._auth, proxy=proxy)
+        self._auth._bind_transport(self._transport._token_request)
         self._api = Api(self._transport)
 
     async def _invoke(self, api_method):
@@ -71,11 +72,12 @@ class Client:
     # region Public Methods
 
     async def connect(self) -> bool:
-        """Подключить клиент"""
-        await self._api._connect()  # TODO
+        """Поднять транспорт (HTTP-клиент). Для OAuth это ещё не значит,
+        что клиент авторизован - до вызова `authorize(code)` запросы к
+        API будут падать с `AuthRequiredError`"""
+        await self._api._connect()
 
         self._connected = True
-
         return True
 
     async def disconnect(self):
@@ -85,16 +87,15 @@ class Client:
         self._connected = False
 
     async def start(self):
-        """Запустить клиент
+        """Запустить клиент (поднять транспорт)
 
-        Этот метод запускает транспорт и, по необходимости, запрашивает авторизацию (если указаны OAuth ключи)
+        Для OAuth требуется авторизация. Проходит отдельным 
+        шагом через `get_authorize_url()`/`authorize()`.
         """
         if await self.connect():
             return self
 
-        # TODO: флоу авторизации
-
-    async def get_me(self):
+    async def get_me(self) -> types.User:
         """Получить данные текущего авторизованного пользователя
 
         Этот метод возвращает обработанный ``donatex.types.User``"""
@@ -110,7 +111,7 @@ class Client:
         custom_period: types.CustomPeriod | None = None,
         sort_order: types.SortScope | None = None,
         auto_paginate: bool = False,
-    ):
+    ) -> list[types.Donation]:
         """Поиск, фильтрация по периоду и пагинация донатов стримера. По умолчанию возвращаются все донаты от новых к старым.
 
         Parameters:
@@ -155,14 +156,51 @@ class Client:
         )
 
     async def stop(self):
+        """Остановить клиент и закрыть транспорт
+
+        Кидает ``ConnectionError``, если клиент уже остановлен или ещё не был запущен"""
         if not self._connected:
             raise ConnectionError("Клиент уже остановлен")
 
         await self.disconnect()
         return
 
-    async def authorize(self):
-        pass
+    def get_authorize_url(self, redirect_uri: str, state: str | None = None) -> str:
+        """Ссылка для получения согласия пользователя при OAuth авторизации
+
+        Откройте её в браузере - после согласия DonateX сделает редирект на
+        ``redirect_uri`` с параметром ``code`` в query, который нужно передать
+        в `authorize()`
+        Не имеет смысла при авторизации через ``api_token``
+
+        Parameters:
+            redirect_uri (``str``):
+                URL, на который DonateX вернёт пользователя с ``code``.
+                Должен совпадать с тем, что зарегистрирован у OAuth приложения
+
+            state (``str``, *optional*):
+                Произвольное значение для защиты от CSRF — вернётся в редиректе
+                без изменений, сверьте его на своей стороне
+        """
+        if self._auth._TYPE == "EXTERNAL":
+            raise errors.AuthConfigError(
+                "get_authorize_url() не применим при авторизации через api_token"
+            )
+        return self._auth.get_authorize_url(redirect_uri, state=state)
+
+    async def authorize(self, code: str) -> None:
+        """Обменять ``code`` из редиректа на access/refresh токены и завершить OAuth авторизацию
+
+        Не нужен при авторизации через ``api_token`` - вызов будет проигнорирован
+
+        Parameters:
+            code (``str``):
+                Значение параметра ``code`` из query редиректа на ваш ``redirect_uri``
+        """
+        if self._auth._TYPE == "EXTERNAL":
+            return
+
+        await self._auth.authorize(code)
 
     # endregion Public Methods
 
