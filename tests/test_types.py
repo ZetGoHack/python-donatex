@@ -97,6 +97,7 @@ def test_donation_parse_handles_missing_optional_music_link(donation_raw):
     donation = types.Donation._parse(raw)
 
     assert donation.music_link is None
+    assert donation._client is None
 
 
 def test_donation_parse_maps_every_field(donation_raw):
@@ -125,19 +126,38 @@ def test_donation_parse_maps_every_field(donation_raw):
     assert donation.id == "d1"
     assert donation.username == "zgo"
     assert donation.message == "hi"
-    assert donation.with_AI_response is True
     assert donation.music_link == "https://x/track.mp3"
-    assert donation.currency == "RUB"
-    assert donation.amount == 100.0
-    assert donation.amount_in_rub == 100.0
+    assert donation.voice_file_path == "voice.mp3"
     assert donation.timestamp == datetime.datetime(
         2026, 3, 5, 12, 0, tzinfo=datetime.timezone.utc
     )
-    assert donation.ai_response == "hey"
-    assert donation.ai_response_voice_file_path == "v.mp3"
-    assert donation.was_shown is True
-    assert donation.is_test is False
-    assert donation.is_potentially_unsafe is True
-    assert donation.is_fee_paid_by_user is True
-    assert donation.voice_file_path == "voice.mp3"
-    assert donation.paid_voice == "Канеки"
+
+    assert donation.amount.value == 100.0
+    assert donation.amount.value_in_rub == 100.0
+    assert donation.amount.currency == "RUB"
+
+    assert donation.ai.enabled is True
+    assert donation.ai.text == "hey"
+    assert donation.ai.voice_file_path == "v.mp3"
+    assert donation.ai.paid_voice == "Канеки"
+
+    assert donation.flags.was_shown is True
+    assert donation.flags.is_test is False
+    assert donation.flags.is_potentially_unsafe is True
+    assert donation.flags.is_fee_paid_by_user is True
+
+
+def test_donation_parse_binds_client_when_given(donation_raw):
+    raw = donation_raw()
+    client = object()
+
+    donation = types.Donation._parse(raw, client=client)
+
+    assert donation._client is client
+
+
+async def test_donation_skip_requires_bound_client(donation_raw):
+    donation = types.Donation._parse(donation_raw())
+
+    with pytest.raises(RuntimeError):
+        await donation.skip()

@@ -1,7 +1,10 @@
 import datetime
 import typing
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+if typing.TYPE_CHECKING:
+    from .client import Client
 
 TokenScope = typing.Literal[
     "donations.read",       # Чтение истории донатов, топа донатеров и активной цели авторизованного стримера.
@@ -29,6 +32,13 @@ PeriodScope = typing.Literal[
 SortScope = typing.Literal[
     "NewestFirst",
     "OldestFirst",
+]
+
+CurrencyScope = typing.Literal[
+    "RUB",
+    "USD",
+    "KZT",
+    "EUR",
 ]
 
 
@@ -77,43 +87,89 @@ class User:
 
 
 @dataclass
-class Donation: # TODO: Переработка атрибутов
-    id: str
-    username: str
-    message: str
-    with_AI_response: bool
-    music_link: str | None
-    currency: str
-    amount: float
-    amount_in_rub: float
-    timestamp: datetime.datetime
-    ai_response: str | None
-    ai_response_voice_file_path: str | None
+class DonationAmount:
+    value: float
+    value_in_rub: float
+    currency: CurrencyScope
+
+
+@dataclass
+class AIResponse:
+    enabled: bool
+    text: str | None
+    voice_file_path: str | None
+    paid_voice: str | None
+
+
+@dataclass
+class DonationFlags:
     was_shown: bool
     is_test: bool
     is_potentially_unsafe: bool
     is_fee_paid_by_user: bool
+
+
+@dataclass
+class Donation:
+    id: str
+    username: str
+    message: str
+    music_link: str | None
     voice_file_path: str
-    paid_voice: str
+    timestamp: datetime.datetime
+    amount: DonationAmount
+    ai: AIResponse
+    flags: DonationFlags
+    raw: dict
+    _client: "Client | None" = field(default=None, repr=False, compare=False)
 
     @staticmethod
-    def _parse(raw: dict):
+    def _parse(raw: dict, client: "Client | None" = None) -> "Donation":
         return Donation(
             id=raw["id"],
             username=raw["username"],
             message=raw["message"],
-            with_AI_response=raw["withAIResponse"],
             music_link=raw.get("musicLink", None),
-            currency=raw["currency"],
-            amount=raw["amount"],
-            amount_in_rub=raw["amountInRub"],
-            timestamp=datetime.datetime.fromisoformat(raw["timestamp"]),
-            ai_response=raw["aiResponse"],
-            ai_response_voice_file_path=raw["aiResponseVoiceFilePath"],
-            was_shown=raw["wasShown"],
-            is_test=raw["isTest"],
-            is_potentially_unsafe=raw["isPotentiallyUnsafe"],
-            is_fee_paid_by_user=raw["isFeePaidByUser"],
             voice_file_path=raw["voiceFilePath"],
-            paid_voice=raw["paidVoice"],
+            timestamp=datetime.datetime.fromisoformat(raw["timestamp"]),
+            amount=DonationAmount(
+                value=raw["amount"],
+                value_in_rub=raw["amountInRub"],
+                currency=raw["currency"],
+            ),
+            ai=AIResponse(
+                enabled=raw["withAIResponse"],
+                text=raw["aiResponse"],
+                voice_file_path=raw["aiResponseVoiceFilePath"],
+                paid_voice=raw["paidVoice"],
+            ),
+            flags=DonationFlags(
+                was_shown=raw["wasShown"],
+                is_test=raw["isTest"],
+                is_potentially_unsafe=raw["isPotentiallyUnsafe"],
+                is_fee_paid_by_user=raw["isFeePaidByUser"],
+            ),
+            raw=raw,
+            _client=client,
         )
+
+    def _bind(self, client: "Client") -> None:
+        self._client = client
+
+    def _require_client(self) -> "Client":
+        if self._client is None:
+            raise RuntimeError(
+                f"{self.__class__.__name__} не привязан к Client, "
+                "действие недоступно"
+            )
+        return self._client
+
+    # region Shortcuts
+
+    async def skip(self):
+        """Пропускает конкретный донат по его ID — независимо от того, является ли он текущим в очереди. Помечает донат как показанный."""
+        self._require_client()
+        # TODO
+        raise NotImplementedError("метод для скипа доната пока не реализован...")
+
+    # endregion Shortcuts

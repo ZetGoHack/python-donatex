@@ -142,7 +142,7 @@ class Client:
 
             auto_paginate (``bool``, *optional*):
                 Автоматическая пагинация с получением ``limit`` объектов"""
-        return await self._invoke(
+        donations = await self._invoke(
             self._api.get_donations(
                 offset=offset,
                 limit=limit,
@@ -154,6 +154,10 @@ class Client:
                 auto_paginate=auto_paginate,
             )
         )
+        for donation in donations:
+            donation._bind(self)
+
+        return donations
 
     async def stop(self):
         """Остановить клиент и закрыть транспорт
