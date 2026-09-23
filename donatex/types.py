@@ -41,6 +41,8 @@ CurrencyScope = typing.Literal[
     "EUR",
 ]
 
+EventTypeScope = typing.Literal["DonationCreated"]
+
 
 @dataclass
 class CustomPeriod:
@@ -168,8 +170,8 @@ class Donation:
 
     async def skip(self):
         """Пропускает конкретный донат по его ID — независимо от того, является ли он текущим в очереди. Помечает донат как показанный."""
-        self._require_client()
-        # TODO
-        raise NotImplementedError("метод для скипа доната пока не реализован...")
+        client = self._require_client()
+        await client.skip_donation(self.id)
+        self.flags.was_shown = True
 
     # endregion Shortcuts

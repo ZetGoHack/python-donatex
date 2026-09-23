@@ -1,5 +1,6 @@
 import asyncio
 import time
+import secrets
 
 from . import types, errors
 from ._transport import Transport
@@ -53,7 +54,7 @@ class Api:
 
     # region Public Methods
 
-    async def get_me(self) -> types.User:
+    async def get_me(self):
         raw = await self._send_request("/v1/user/me", "GET")
 
         result = types.User._parse(raw)
@@ -64,13 +65,13 @@ class Api:
         self,
         offset: int,
         limit: int,
-        query: str | None = None,
-        hide_test: bool | None = None,
-        period: types.PeriodScope | None = None,
-        custom_period: types.CustomPeriod | None = None,
-        sort_order: types.SortScope | None = None,
-        auto_paginate: bool = False,
-    ) -> list[types.Donation]:
+        query: str | None,
+        hide_test: bool | None,
+        period: types.PeriodScope | None,
+        custom_period: types.CustomPeriod | None,
+        sort_order: types.SortScope | None,
+        auto_paginate: bool,
+    ):
         data = {}
 
         if query is not None:
@@ -114,6 +115,131 @@ class Api:
             remaining -= take
 
         return [types.Donation._parse(raw) for raw in raw_results]
+
+    async def get_current_goal(self):
+        try:
+            raw = await self._send_request("/v1/goals/current", "GET")
+        except errors.ApiError as e:
+            if e.status_code == 404:
+                return None
+            raise
+
+        return raw
+
+    async def get_current_track(self):
+        raw = await self._send_request("/v1/music/current", "GET")
+
+        return raw
+
+    async def get_donators_top(self, period: types.PeriodScope, count: int | None):
+        data = {"period": period}
+
+        if count is not None:
+            data["count"] = count
+
+        raw = await self._send_request("/v1/top-donators", "GET", data)
+
+        return raw
+
+    async def get_characters(self):
+        raw = await self._send_request("/v1/ai/characters", "GET")
+
+        return raw
+
+    async def get_character(self, id: str):
+        endpoint = f"/v1/ai/characters/{id}"
+
+        try:
+            raw = await self._send_request(endpoint, "GET")
+        except errors.ApiError as e:
+            if e.status_code == 404:
+                raise errors.NotFoundError(
+                    f"Персонаж {id!r} не найден, удалён или принадлежит другому пользователю",
+                    status_code=404,
+                ) from e
+            raise
+
+        return raw
+
+    async def get_subscriptions(self):
+        raw = await self._send_request("/v1/webhooks/subscriptions", "GET")
+
+        return raw
+
+    async def send_test_donation(
+        self,
+        username: str,
+        amount: float,
+        currency: types.CurrencyScope,
+        message: str | None,
+        ai_response: bool | None,
+    ):
+        data = {"username": username, "amount": amount, "currency": currency}
+
+        if message is not None:
+            data["message"] = message
+        if ai_response is not None:
+            data["withAIResponse"] = ai_response
+
+        raw = await self._send_request("/v1/test-donation", "POST", data)
+
+        return raw
+
+    async def skip_donation(self, id: str):
+        endpoint = f"/v1/donations/{id}/skip"
+
+        raw = await self._send_request(endpoint, "POST")
+
+        return raw
+
+    async def skip_current_track(self):
+        raw = await self._send_request("/v1/music/skip-current", "POST")
+
+        return raw
+
+    async def skip_current_donation(self):
+        raw = await self._send_request("/v1/donations/skip-current", "POST")
+
+        return raw
+
+    async def create_subscription(
+        self,
+        url: str,
+        event_type: types.EventTypeScope,
+        client_id: str | None,
+        secret: str | None,
+    ):
+        if not url.startswith("https://"):
+            raise errors.ArgumentsConflictError("url подписки должен быть HTTPS")
+
+        secret = secret or secrets.token_urlsafe(32)
+
+        data = {
+            "url": url,
+            "eventType": event_type,
+            "secret": secret,
+        }
+
+        if client_id is not None:
+            data["clientId"] = client_id
+
+        raw = await self._send_request("/v1/webhooks/subscriptions", "POST", data)
+
+        return raw
+
+    async def delete_subscription(self, id: str):
+        endpoint = f"/v1/webhooks/subscriptions/{id}"
+
+        raw = await self._send_request(endpoint, "DELETE")
+
+        return raw
+
+    async def activate_subscription(self, id: str):
+        endpoint = f"/v1/webhooks/subscriptions/{id}/activate"
+
+        raw = await self._send_request(endpoint, "POST")
+
+        return raw
 
     # endregion
 

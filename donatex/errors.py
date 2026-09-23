@@ -9,6 +9,12 @@ class AuthRequiredError(Exception):
 
 class ApiError(Exception):
     """Is being raised when API threw an error"""
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+class NotFoundError(ApiError):
+    """Is being raised when a resource looked up by id doesn't exist, was deleted, or doesn't belong to the token owner"""
 
 class InvalidScopeError(Exception):
     """Is being raised when the specified scopes are invalid"""

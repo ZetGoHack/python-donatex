@@ -49,7 +49,7 @@ class Transport:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         if resp.status_code != 200:
-            raise errors.ApiError(resp.text)
+            raise errors.ApiError(resp.text, status_code=resp.status_code)
 
         return resp.json()
 
@@ -65,15 +65,15 @@ class Transport:
     async def _get(self, url: str, **kwargs):
         resp = await self._request("get", url, **kwargs)
         if resp.status_code != 200:
-            raise errors.ApiError(resp.text)
+            raise errors.ApiError(resp.text, status_code=resp.status_code)
 
         return resp.json()
 
     async def _post(self, url: str, **kwargs):
         resp = await self._request("post", url, **kwargs)
         if resp.status_code not in (200, 204):
-            raise errors.ApiError(resp.text)
-        if resp.status_code == 204:
+            raise errors.ApiError(resp.text, status_code=resp.status_code)
+        if resp.status_code == 204 or not resp.content:
             return None
 
         return resp.json()
@@ -81,6 +81,6 @@ class Transport:
     async def _delete(self, url: str, **kwargs):
         resp = await self._request("delete", url, **kwargs)
         if resp.status_code != 204:
-            raise errors.ApiError(resp.text)
+            raise errors.ApiError(resp.text, status_code=resp.status_code)
 
         return None

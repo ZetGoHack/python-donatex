@@ -161,3 +161,19 @@ async def test_donation_skip_requires_bound_client(donation_raw):
 
     with pytest.raises(RuntimeError):
         await donation.skip()
+
+
+async def test_donation_skip_calls_client_and_marks_shown(donation_raw):
+    raw = donation_raw(wasShown=False)
+    calls = []
+
+    class FakeClient:
+        async def skip_donation(self, id):
+            calls.append(id)
+
+    donation = types.Donation._parse(raw, client=FakeClient())
+
+    await donation.skip()
+
+    assert calls == [donation.id]
+    assert donation.flags.was_shown is True

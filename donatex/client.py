@@ -89,7 +89,7 @@ class Client:
     async def start(self):
         """Запустить клиент (поднять транспорт)
 
-        Для OAuth требуется авторизация. Проходит отдельным 
+        Для OAuth требуется авторизация. Проходит отдельным
         шагом через `get_authorize_url()`/`authorize()`.
         """
         if await self.connect():
@@ -158,6 +158,112 @@ class Client:
             donation._bind(self)
 
         return donations
+
+    async def get_current_track(self) -> dict:
+        """Возвращает текущее состояние воспроизведения: играет ли сейчас музыка и какой трек
+        стоит первым в очереди.
+        
+        ⚠️ Чтобы трек попал в очередь, донат должен быть показан на стриме, или скипнут через API"""
+        return await self._invoke(self._api.get_current_track())
+
+    async def get_current_goal(self) -> dict | None:
+        """Возвращает активную цель стримера. Суммы цели всегда представлены в рублях.
+        Если активной цели нет, возвращает ``None``"""
+        return await self._invoke(self._api.get_current_goal())
+
+    async def get_donators_top(
+        self, period: types.PeriodScope, count: int = 10
+    ) -> list[dict]:
+        """Возвращает топ донатеров стримера за выбранный период, отсортированный по
+        суммарной сумме донатов в рублях. Учитывает скрытых донатеров из настроек стримера.
+        """
+        return await self._invoke(self._api.get_donators_top(period, count))
+
+    async def get_characters(self) -> list[dict]:
+        """Возвращает персонажей владельца токена, включая неактивных. Удалённые персонажи
+        не возвращаются. Если персонажей нет, ответ — пустой массив []. Сортировка: по имени,
+        затем по ID"""
+        return await self._invoke(self._api.get_characters())
+
+    async def get_character(self, id: str) -> dict:
+        """Получить ИИ-персонажа по id
+
+        Кидает ``NotFoundError``, если персонаж не найден, удалён или
+        принадлежит другому пользователю"""
+        return await self._invoke(self._api.get_character(id))
+
+    async def get_subscriptions(self) -> list[dict]:
+        """Получить список всех подписок текущего стримера"""
+        return await self._invoke(self._api.get_subscriptions())
+
+    async def send_test_donation(
+        self,
+        username: str,
+        amount: float,
+        currency: types.CurrencyScope,
+        message: str | None = None,
+        ai_response: bool = None,
+    ) -> None:
+        """Отправляет тестовый донат
+
+        Parameters:
+            username (``str``):
+                Имя донатера
+
+            amount (``float``):
+                Сумма
+
+            currency (``str``):
+                Валюта доната. Может быть одной из ``"RUB"``, ``"USD"``,
+                ``"KZT"``, ``"EUR"``
+
+            ai_response (``bool``, *optional*):
+                Синтез ответа ИИ (если разрешено)
+
+            message (``str``, *optional*):
+                Текст сообщения"""
+        return await self._invoke(
+            self._api.send_test_donation(
+                username, amount, currency, message, ai_response
+            )
+        )
+
+    async def skip_donation(self, id: str) -> None:
+        """Пропускает конкретный донат по его ID — независимо от того, является ли он текущим в очереди.
+        Помечает донат как показанный"""
+        return await self._invoke(self._api.skip_donation(id))
+
+    async def skip_current_track(self) -> dict:
+        """Пропускает текущий трек в музыкальном виджете стримера и помечает донат как воспроизведенный"""
+        return await self._invoke(self._api.skip_current_track())
+
+    async def skip_current_donation(self) -> dict:
+        """Пропускает текущий показываемый донат (TTS, анимация). Аналог кнопки «Скип» в личном
+        кабинете стримера. Помечает донат как показанный"""
+        return await self._invoke(self._api.skip_current_donation())
+
+    async def create_subscription(
+        self,
+        url: str,
+        event_type: types.EventTypeScope,
+        secret: str | None = None,
+        client_id: str | None = None,
+    ) -> dict:
+        """Регистрирует webhook. Требуется HTTPS и секрет для подписи"""
+        if client_id is None and self._auth._TYPE != "EXTERNAL":
+            client_id = self._auth._client_id
+
+        return await self._invoke(
+            self._api.create_subscription(url, event_type, client_id, secret)
+        )
+
+    async def delete_subscription(self, id: str) -> None:
+        """Мягкое удаление подписки. Доставки прекращаются, подписку можно снова активировать"""
+        return await self._invoke(self._api.delete_subscription(id))
+
+    async def activate_subscription(self, id: str) -> None:
+        """Повторно включает ранее отключенную подписку и сбрасывает счетчик ошибок"""
+        return await self._invoke(self._api.activate_subscription(id))
 
     async def stop(self):
         """Остановить клиент и закрыть транспорт
