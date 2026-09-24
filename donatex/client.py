@@ -142,7 +142,7 @@ class Client:
 
             auto_paginate (``bool``, *optional*):
                 Автоматическая пагинация с получением ``limit`` объектов"""
-        donations = await self._invoke(
+        donations: list[types.Donation] = await self._invoke(
             self._api.get_donations(
                 offset=offset,
                 limit=limit,
@@ -159,42 +159,53 @@ class Client:
 
         return donations
 
-    async def get_current_track(self) -> dict:
+    async def get_current_track(self) -> types.TrackState:
         """Возвращает текущее состояние воспроизведения: играет ли сейчас музыка и какой трек
         стоит первым в очереди.
-        
-        ⚠️ Чтобы трек попал в очередь, донат должен быть показан на стриме, или скипнут через API"""
+
+        ⚠️ Чтобы трек попал в очередь, донат должен быть показан на стриме, или скипнут через API
+        """
         return await self._invoke(self._api.get_current_track())
 
-    async def get_current_goal(self) -> dict | None:
+    async def get_current_goal(self) -> types.GoalState | None:
         """Возвращает активную цель стримера. Суммы цели всегда представлены в рублях.
         Если активной цели нет, возвращает ``None``"""
         return await self._invoke(self._api.get_current_goal())
 
     async def get_donators_top(
         self, period: types.PeriodScope, count: int = 10
-    ) -> list[dict]:
+    ) -> list[types.TopDonator]:
         """Возвращает топ донатеров стримера за выбранный период, отсортированный по
         суммарной сумме донатов в рублях. Учитывает скрытых донатеров из настроек стримера.
         """
         return await self._invoke(self._api.get_donators_top(period, count))
 
-    async def get_characters(self) -> list[dict]:
+    async def get_characters(self) -> list[types.AICharacter]:
         """Возвращает персонажей владельца токена, включая неактивных. Удалённые персонажи
         не возвращаются. Если персонажей нет, ответ — пустой массив []. Сортировка: по имени,
         затем по ID"""
         return await self._invoke(self._api.get_characters())
 
-    async def get_character(self, id: str) -> dict:
+    async def get_character(self, id: str) -> types.AICharacter:
         """Получить ИИ-персонажа по id
 
         Кидает ``NotFoundError``, если персонаж не найден, удалён или
         принадлежит другому пользователю"""
         return await self._invoke(self._api.get_character(id))
 
-    async def get_subscriptions(self) -> list[dict]:
-        """Получить список всех подписок текущего стримера"""
-        return await self._invoke(self._api.get_subscriptions())
+    async def get_subscriptions(self) -> list[types.WebhookSubscription]:
+        """Получить список активных подписок текущего стримера
+
+        ⚠️ Удалённые через ``delete()``/``delete_subscription()`` подписки в этот
+        список не попадают, хотя формально не стёрты — их можно вернуть через
+        ``activate()``/``activate_subscription()`` по сохранённому ``id``"""
+        subscriptions: list[types.WebhookSubscription] = await self._invoke(
+            self._api.get_subscriptions()
+        )
+        for subscription in subscriptions:
+            subscription._bind(self)
+
+        return subscriptions
 
     async def send_test_donation(
         self,
@@ -233,11 +244,11 @@ class Client:
         Помечает донат как показанный"""
         return await self._invoke(self._api.skip_donation(id))
 
-    async def skip_current_track(self) -> dict:
+    async def skip_current_track(self) -> types.TrackSkipResult:
         """Пропускает текущий трек в музыкальном виджете стримера и помечает донат как воспроизведенный"""
         return await self._invoke(self._api.skip_current_track())
 
-    async def skip_current_donation(self) -> dict:
+    async def skip_current_donation(self) -> types.DonationSkipResult:
         """Пропускает текущий показываемый донат (TTS, анимация). Аналог кнопки «Скип» в личном
         кабинете стримера. Помечает донат как показанный"""
         return await self._invoke(self._api.skip_current_donation())
@@ -248,14 +259,20 @@ class Client:
         event_type: types.EventTypeScope,
         secret: str | None = None,
         client_id: str | None = None,
-    ) -> dict:
-        """Регистрирует webhook. Требуется HTTPS и секрет для подписи"""
+    ) -> types.SubscriptionCreated:
+        """Регистрирует webhook. Требуется HTTPS и секрет для подписи
+
+        Возвращает ``(subscription, secret)`` - если ``secret`` не указан,
+        он генерируется автоматически"""
         if client_id is None and self._auth._TYPE != "EXTERNAL":
             client_id = self._auth._client_id
 
-        return await self._invoke(
+        result: types.SubscriptionCreated = await self._invoke(
             self._api.create_subscription(url, event_type, client_id, secret)
         )
+        result.subscription._bind(self)
+
+        return result
 
     async def delete_subscription(self, id: str) -> None:
         """Мягкое удаление подписки. Доставки прекращаются, подписку можно снова активировать"""
@@ -275,7 +292,9 @@ class Client:
         await self.disconnect()
         return
 
-    def get_authorize_url(self, redirect_uri: str, state: str | None = None) -> str:
+    def get_authorize_url(
+        self, redirect_uri: str, state: str | None = None
+    ) -> types.AuthorizeUrl:
         """Ссылка для получения согласия пользователя при OAuth авторизации
 
         Откройте её в браузере - после согласия DonateX сделает редирект на
@@ -291,6 +310,10 @@ class Client:
             state (``str``, *optional*):
                 Произвольное значение для защиты от CSRF — вернётся в редиректе
                 без изменений, сверьте его на своей стороне
+
+        Возвращает ``(url, code_verifier)``. Если ``authorize()`` будет вызван
+        в другом экземпляре ``Client``, сохраните ``code_verifier`` на
+        своей стороне и передайте его в ``authorize()``
         """
         if self._auth._TYPE == "EXTERNAL":
             raise errors.AuthConfigError(
@@ -298,7 +321,12 @@ class Client:
             )
         return self._auth.get_authorize_url(redirect_uri, state=state)
 
-    async def authorize(self, code: str) -> None:
+    async def authorize(
+        self,
+        code: str,
+        code_verifier: str | None = None,
+        redirect_uri: str | None = None,
+    ) -> None:
         """Обменять ``code`` из редиректа на access/refresh токены и завершить OAuth авторизацию
 
         Не нужен при авторизации через ``api_token`` - вызов будет проигнорирован
@@ -306,11 +334,21 @@ class Client:
         Parameters:
             code (``str``):
                 Значение параметра ``code`` из query редиректа на ваш ``redirect_uri``
+
+            code_verifier (``str``, *optional*):
+                ``code_verifier`` из ``get_authorize_url()``. Нужен, только если
+                ссылка была получена в другом экземпляре ``Client``
+
+            redirect_uri (``str``, *optional*):
+                Тот же ``redirect_uri``, что и в ``get_authorize_url()``. Нужен
+                вместе с ``code_verifier``
         """
         if self._auth._TYPE == "EXTERNAL":
             return
 
-        await self._auth.authorize(code)
+        await self._auth.authorize(
+            code, code_verifier=code_verifier, redirect_uri=redirect_uri
+        )
 
     # endregion Public Methods
 

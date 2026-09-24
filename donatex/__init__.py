@@ -2,6 +2,9 @@
 
 __author__ = "ZetGoHack"
 __license__ = "MIT"
-__version__ = "0.0.10"
+__version__ = "0.0.11"
 
 from .client import Client
+from . import errors, types
+
+__all__ = ["Client", "errors", "types"]

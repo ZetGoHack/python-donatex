@@ -54,8 +54,9 @@ async def test_get_access_token_refreshes_when_expired(auth_cls, make_kwargs):
 def test_authorize_url_includes_pkce_challenge(auth_cls, make_kwargs):
     auth = auth_cls(**make_kwargs, scopes={"donations.read"})
 
-    url = auth.get_authorize_url("https://example.com/callback")
+    url, code_verifier = auth.get_authorize_url("https://example.com/callback")
 
+    assert code_verifier == auth._code_verifier
     assert "code_challenge=" in url
     assert "code_challenge_method=S256" in url
     assert "client_id=id" in url
@@ -114,3 +115,41 @@ async def test_refresh_without_refresh_token_raises():
 
     with pytest.raises(errors.AuthRequiredError):
         await auth.refresh()
+
+
+@pytest.mark.parametrize(
+    "auth_cls, make_kwargs",
+    [
+        (OAuthConfidentialAuth, {"client_id": "id", "client_secret": "secret"}),
+        (OAuthPublicAuth, {"client_id": "id"}),
+    ],
+)
+async def test_authorize_in_another_instance_with_saved_verifier(auth_cls, make_kwargs):
+    _, code_verifier = auth_cls(
+        **make_kwargs, scopes={"donations.read"}
+    ).get_authorize_url("https://example.com/callback")
+
+    auth = auth_cls(**make_kwargs, scopes={"donations.read"})
+    token_request = AsyncMock(return_value={"access_token": "new-token"})
+    auth._bind_transport(token_request)
+
+    await auth.authorize(
+        "the-code",
+        code_verifier=code_verifier,
+        redirect_uri="https://example.com/callback",
+    )
+
+    payload = token_request.call_args.args[1]
+    assert payload["code_verifier"] == code_verifier
+    assert payload["redirect_uri"] == "https://example.com/callback"
+    assert auth.is_authorized()
+
+
+async def test_authorize_without_verifier_raises():
+    from donatex import errors
+
+    auth = OAuthPublicAuth("id", scopes={"donations.read"})
+    auth._bind_transport(AsyncMock())
+
+    with pytest.raises(errors.AuthRequiredError):
+        await auth.authorize("the-code")

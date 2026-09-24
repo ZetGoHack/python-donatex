@@ -102,15 +102,16 @@ async def test_get_donations_auto_paginate_stops_when_page_smaller_than_take(
     assert second_call_params["take"] == 50
 
 
-async def test_get_current_goal_requests_correct_endpoint():
+async def test_get_current_goal_requests_correct_endpoint(goal_raw):
     api, transport = make_api()
-    transport._get.return_value = {"id": "goal-1"}
+    transport._get.return_value = goal_raw
 
     result = await api.get_current_goal()
 
     called_url = transport._get.call_args.args[0]
     assert called_url.endswith("/v1/goals/current")
-    assert result == {"id": "goal-1"}
+    assert isinstance(result, types.GoalState)
+    assert result.id == "goal-1"
 
 
 async def test_get_current_goal_returns_none_on_404():
@@ -130,56 +131,61 @@ async def test_get_current_goal_reraises_non_404_errors():
         await api.get_current_goal()
 
 
-async def test_get_current_track_requests_correct_endpoint():
+async def test_get_current_track_requests_correct_endpoint(track_raw):
     api, transport = make_api()
-    transport._get.return_value = {"title": "song"}
+    transport._get.return_value = track_raw
 
     result = await api.get_current_track()
 
     called_url = transport._get.call_args.args[0]
     assert called_url.endswith("/v1/music/current")
-    assert result == {"title": "song"}
+    assert isinstance(result, types.TrackState)
+    assert result.is_playing is True
 
 
-async def test_get_donators_top_omits_count_when_not_given():
+async def test_get_donators_top_omits_count_when_not_given(top_donator_raw):
     api, transport = make_api()
-    transport._get.return_value = []
+    transport._get.return_value = [top_donator_raw]
 
-    await api.get_donators_top(period="Day", count=None)
+    result = await api.get_donators_top(period="Day", count=None)
 
     called_params = transport._get.call_args.kwargs["params"]
     assert called_params == {"period": "Day"}
+    assert isinstance(result[0], types.TopDonator)
 
 
-async def test_get_donators_top_includes_count_when_given():
+async def test_get_donators_top_includes_count_when_given(top_donator_raw):
     api, transport = make_api()
-    transport._get.return_value = []
+    transport._get.return_value = [top_donator_raw]
 
-    await api.get_donators_top(period="Day", count=5)
+    result = await api.get_donators_top(period="Day", count=5)
 
     called_params = transport._get.call_args.kwargs["params"]
     assert called_params == {"period": "Day", "count": 5}
+    assert isinstance(result[0], types.TopDonator)
 
 
-async def test_get_characters_requests_correct_endpoint():
+async def test_get_characters_requests_correct_endpoint(character_raw):
     api, transport = make_api()
-    transport._get.return_value = []
+    transport._get.return_value = [character_raw]
 
-    await api.get_characters()
+    result = await api.get_characters()
 
     called_url = transport._get.call_args.args[0]
     assert called_url.endswith("/v1/ai/characters")
+    assert isinstance(result[0], types.AICharacter)
 
 
-async def test_get_character_requests_correct_endpoint():
+async def test_get_character_requests_correct_endpoint(character_raw):
     api, transport = make_api()
-    transport._get.return_value = {"id": "char-1"}
+    transport._get.return_value = character_raw
 
     result = await api.get_character("char-1")
 
     called_url = transport._get.call_args.args[0]
     assert called_url.endswith("/v1/ai/characters/char-1")
-    assert result == {"id": "char-1"}
+    assert isinstance(result, types.AICharacter)
+    assert result.id == "char-1"
 
 
 async def test_get_character_raises_not_found_on_404():
@@ -250,14 +256,27 @@ async def test_skip_donation_posts_to_correct_endpoint():
     assert called_url.endswith("/v1/donations/d1/skip")
 
 
-async def test_skip_current_track_posts_to_correct_endpoint():
+async def test_skip_current_track_posts_to_correct_endpoint(track_skip_raw):
     api, transport = make_api()
-    transport._post.return_value = {}
+    transport._post.return_value = track_skip_raw
 
-    await api.skip_current_track()
+    result = await api.skip_current_track()
 
     called_url = transport._post.call_args.args[0]
     assert called_url.endswith("/v1/music/skip-current")
+    assert isinstance(result, types.TrackSkipResult)
+
+
+async def test_skip_current_donation_posts_to_correct_endpoint():
+    api, transport = make_api()
+    transport._post.return_value = {"skipped": True, "skippedDonationId": "d1"}
+
+    result = await api.skip_current_donation()
+
+    called_url = transport._post.call_args.args[0]
+    assert called_url.endswith("/v1/donations/skip-current")
+    assert isinstance(result, types.DonationSkipResult)
+    assert result.skipped_donation_id == "d1"
 
 
 async def test_create_subscription_rejects_non_https_url():
@@ -272,11 +291,11 @@ async def test_create_subscription_rejects_non_https_url():
         )
 
 
-async def test_create_subscription_generates_secret_when_not_given():
+async def test_create_subscription_generates_secret_when_not_given(subscription_raw):
     api, transport = make_api()
-    transport._post.return_value = {"id": "sub-1"}
+    transport._post.return_value = subscription_raw
 
-    await api.create_subscription(
+    result = await api.create_subscription(
         url="https://example.com/hook",
         event_type="DonationCreated",
         client_id=None,
@@ -285,11 +304,28 @@ async def test_create_subscription_generates_secret_when_not_given():
 
     called_json = transport._post.call_args.kwargs["json"]
     assert called_json["secret"]
+    assert isinstance(result, types.SubscriptionCreated)
+    assert result.secret == called_json["secret"]
 
 
-async def test_create_subscription_keeps_given_secret():
+async def test_create_subscription_returns_subscription_and_secret(subscription_raw):
     api, transport = make_api()
-    transport._post.return_value = {"id": "sub-1"}
+    transport._post.return_value = subscription_raw
+
+    sub, secret = await api.create_subscription(
+        url="https://example.com/hook",
+        event_type="DonationCreated",
+        client_id=None,
+        secret=None,
+    )
+
+    assert isinstance(sub, types.WebhookSubscription)
+    assert secret == transport._post.call_args.kwargs["json"]["secret"]
+
+
+async def test_create_subscription_keeps_given_secret(subscription_raw):
+    api, transport = make_api()
+    transport._post.return_value = subscription_raw
 
     await api.create_subscription(
         url="https://example.com/hook",
@@ -307,10 +343,10 @@ async def test_create_subscription_keeps_given_secret():
     [(None, False), ("my-app", True)],
 )
 async def test_create_subscription_client_id_included_only_when_given(
-    client_id, expect_present
+    client_id, expect_present, subscription_raw
 ):
     api, transport = make_api()
-    transport._post.return_value = {"id": "sub-1"}
+    transport._post.return_value = subscription_raw
 
     await api.create_subscription(
         url="https://example.com/hook",

@@ -6,7 +6,7 @@ import urllib.parse
 
 from abc import ABC, abstractmethod
 
-from . import errors
+from . import errors, types
 from .utils import validate_scopes
 
 _AUTHORIZE_URL = "https://donatex.gg/api/connect/authorize"
@@ -31,6 +31,7 @@ class AuthStrategy(ABC):
 
 class ExternalTokenAuth(AuthStrategy):
     """Авторизация с бессрочным токеном только под личный аккаунт"""
+
     _TYPE = "EXTERNAL"
 
     def __init__(self, token: str):
@@ -61,12 +62,16 @@ class OAuthStrategy(AuthStrategy):
     def _bind_transport(self, token_request) -> None:
         self._token_request = token_request
 
-    def get_authorize_url(self, redirect_uri: str, state: str | None = None) -> str:
+    def get_authorize_url(
+        self, redirect_uri: str, state: str | None = None
+    ) -> types.AuthorizeUrl:
         """Ссылка для получения согласия пользователя при OAuth-авторизации"""
         self._redirect_uri = redirect_uri
         self._code_verifier = secrets.token_urlsafe(64)
         challenge = (
-            base64.urlsafe_b64encode(hashlib.sha256(self._code_verifier.encode()).digest())
+            base64.urlsafe_b64encode(
+                hashlib.sha256(self._code_verifier.encode()).digest()
+            )
             .rstrip(b"=")
             .decode()
         )
@@ -81,7 +86,10 @@ class OAuthStrategy(AuthStrategy):
         }
         if state is not None:
             params["state"] = state
-        return f"{_AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
+        return types.AuthorizeUrl(
+            url=f"{_AUTHORIZE_URL}?{urllib.parse.urlencode(params)}",
+            code_verifier=self._code_verifier,
+        )
 
     @abstractmethod
     def _build_token_payload(self, code: str) -> dict: ...
@@ -106,10 +114,24 @@ class OAuthStrategy(AuthStrategy):
             return False
         return time.time() >= self._expires_at
 
-    async def authorize(self, code: str) -> None:
+    async def authorize(
+        self,
+        code: str,
+        code_verifier: str | None = None,
+        redirect_uri: str | None = None,
+    ) -> None:
         if self._token_request is None:
             raise errors.AuthRequiredError(
                 "Auth не привязан к транспорту — authorize() нельзя вызвать напрямую, только через Client"
+            )
+        if code_verifier is not None:
+            self._code_verifier = code_verifier
+        if redirect_uri is not None:
+            self._redirect_uri = redirect_uri
+        if self._code_verifier is None or self._redirect_uri is None:
+            raise errors.AuthRequiredError(
+                "Нет code_verifier/redirect_uri — сначала вызовите get_authorize_url() "
+                "на этом же клиенте или передайте их в authorize()"
             )
         data = await self._token_request(_TOKEN_URL, self._build_token_payload(code))
         self._store_tokens(**data)
@@ -130,6 +152,7 @@ class OAuthStrategy(AuthStrategy):
 
 class OAuthConfidentialAuth(OAuthStrategy):
     """Для серверных приложений с несколькими пользователями"""
+
     _TYPE = "OAUTH_CONF"
 
     def __init__(self, client_id, client_secret, scopes=None):
@@ -157,6 +180,7 @@ class OAuthConfidentialAuth(OAuthStrategy):
 
 class OAuthPublicAuth(OAuthStrategy):
     """Для SPA и мобильных клиентов"""
+
     _TYPE = "OAUTH_PUB"
 
     def _build_token_payload(self, code: str) -> dict:

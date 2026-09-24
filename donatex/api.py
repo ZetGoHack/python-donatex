@@ -116,6 +116,13 @@ class Api:
 
         return [types.Donation._parse(raw) for raw in raw_results]
 
+    async def get_current_track(self):
+        raw = await self._send_request("/v1/music/current", "GET")
+
+        result = types.TrackState._parse(raw)
+
+        return result
+
     async def get_current_goal(self):
         try:
             raw = await self._send_request("/v1/goals/current", "GET")
@@ -124,12 +131,9 @@ class Api:
                 return None
             raise
 
-        return raw
+        result = types.GoalState._parse(raw)
 
-    async def get_current_track(self):
-        raw = await self._send_request("/v1/music/current", "GET")
-
-        return raw
+        return result
 
     async def get_donators_top(self, period: types.PeriodScope, count: int | None):
         data = {"period": period}
@@ -137,14 +141,16 @@ class Api:
         if count is not None:
             data["count"] = count
 
-        raw = await self._send_request("/v1/top-donators", "GET", data)
+        raw_results: list[dict] = await self._send_request(
+            "/v1/top-donators", "GET", data
+        )
 
-        return raw
+        return [types.TopDonator._parse(raw) for raw in raw_results]
 
     async def get_characters(self):
-        raw = await self._send_request("/v1/ai/characters", "GET")
+        raw_results: list[dict] = await self._send_request("/v1/ai/characters", "GET")
 
-        return raw
+        return [types.AICharacter._parse(raw) for raw in raw_results]
 
     async def get_character(self, id: str):
         endpoint = f"/v1/ai/characters/{id}"
@@ -159,12 +165,16 @@ class Api:
                 ) from e
             raise
 
-        return raw
+        result = types.AICharacter._parse(raw)
+
+        return result
 
     async def get_subscriptions(self):
-        raw = await self._send_request("/v1/webhooks/subscriptions", "GET")
+        raw_results: list[dict] = await self._send_request(
+            "/v1/webhooks/subscriptions", "GET"
+        )
 
-        return raw
+        return [types.WebhookSubscription._parse(raw) for raw in raw_results]
 
     async def send_test_donation(
         self,
@@ -195,12 +205,16 @@ class Api:
     async def skip_current_track(self):
         raw = await self._send_request("/v1/music/skip-current", "POST")
 
-        return raw
+        result = types.TrackSkipResult._parse(raw)
+
+        return result
 
     async def skip_current_donation(self):
         raw = await self._send_request("/v1/donations/skip-current", "POST")
 
-        return raw
+        result = types.DonationSkipResult._parse(raw)
+
+        return result
 
     async def create_subscription(
         self,
@@ -225,7 +239,12 @@ class Api:
 
         raw = await self._send_request("/v1/webhooks/subscriptions", "POST", data)
 
-        return raw
+        result = types.SubscriptionCreated(
+            subscription=types.WebhookSubscription._parse(raw),
+            secret=secret,
+        )
+
+        return result
 
     async def delete_subscription(self, id: str):
         endpoint = f"/v1/webhooks/subscriptions/{id}"
