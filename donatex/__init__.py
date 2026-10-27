@@ -2,7 +2,7 @@
 
 __author__ = "ZetGoHack"
 __license__ = "MIT"
-__version__ = "0.0.11"
+__version__ = "0.0.12"
 
 from .client import Client
 from . import errors, types

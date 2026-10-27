@@ -3,6 +3,67 @@ import httpx
 from .auth import AuthType
 from . import errors
 
+_STATUS_ERRORS: dict[int, type[errors.ApiError]] = {
+    400: errors.BadRequestError,
+    401: errors.UnauthorizedError,
+    403: errors.ForbiddenError,
+    404: errors.NotFoundError,
+    405: errors.MethodNotAllowedError,
+    409: errors.ConflictError,
+    415: errors.UnsupportedMediaTypeError,
+}
+
+_DEFAULT_MESSAGES = {
+    401: "Токен отсутствует, просрочен, отозван или перевыпущен",
+    403: "У токена нет нужного scope для этого метода",
+    404: "Объект или путь не найден",
+    405: "Метод HTTP не поддерживается для этого пути",
+}
+
+
+def _error_from_response(resp: "httpx.Response") -> errors.ApiError:
+    status = resp.status_code
+    message = resp.text.strip()
+    field_errors = None
+    trace_id = None
+
+    try:
+        body = resp.json()
+    except ValueError:
+        body = None
+
+    if isinstance(body, dict):
+        if isinstance(body.get("errors"), dict):
+            field_errors = {
+                str(k): [str(m) for m in (v if isinstance(v, list) else [v])]
+                for k, v in body["errors"].items()
+            }
+            details = "; ".join(
+                f"{field}: {', '.join(msgs)}" for field, msgs in field_errors.items()
+            )
+            message = details or body.get("title") or message
+        elif body.get("error"):
+            message = str(body["error"])
+        elif body.get("title"):
+            message = str(body["title"])
+        trace_id = body.get("traceId")
+
+    if not message:
+        message = _DEFAULT_MESSAGES.get(status) or f"HTTP {status}"
+
+    kwargs = {"status_code": status, "errors": field_errors, "trace_id": trace_id}
+
+    if status == 429:
+        try:
+            retry_after = float(resp.headers.get("Retry-After", 1))
+        except ValueError:
+            retry_after = 1.0
+        return errors.FloodWaitError(message, retry_after=retry_after, **kwargs)
+    if status >= 500:
+        return errors.ServerError(message, **kwargs)
+
+    return _STATUS_ERRORS.get(status, errors.ApiError)(message, **kwargs)
+
 
 class Transport:
     def __init__(self, auth: AuthType, proxy: str | None = None):
@@ -49,7 +110,7 @@ class Transport:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         if resp.status_code != 200:
-            raise errors.ApiError(resp.text, status_code=resp.status_code)
+            raise _error_from_response(resp)
 
         return resp.json()
 
@@ -65,14 +126,14 @@ class Transport:
     async def _get(self, url: str, **kwargs):
         resp = await self._request("get", url, **kwargs)
         if resp.status_code != 200:
-            raise errors.ApiError(resp.text, status_code=resp.status_code)
+            raise _error_from_response(resp)
 
         return resp.json()
 
     async def _post(self, url: str, **kwargs):
         resp = await self._request("post", url, **kwargs)
         if resp.status_code not in (200, 204):
-            raise errors.ApiError(resp.text, status_code=resp.status_code)
+            raise _error_from_response(resp)
         if resp.status_code == 204 or not resp.content:
             return None
 
@@ -81,6 +142,6 @@ class Transport:
     async def _delete(self, url: str, **kwargs):
         resp = await self._request("delete", url, **kwargs)
         if resp.status_code != 204:
-            raise errors.ApiError(resp.text, status_code=resp.status_code)
+            raise _error_from_response(resp)
 
         return None

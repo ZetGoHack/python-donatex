@@ -2,6 +2,7 @@ import httpx
 import pytest
 
 from donatex.auth import ExternalTokenAuth
+from donatex import errors
 from donatex.errors import ApiError, TransportNotReadyError
 from donatex._transport import Transport
 
@@ -75,3 +76,76 @@ async def test_stop_closes_underlying_httpx_client():
     assert httpx_client.is_closed is True
     assert transport._client is None
     assert transport.is_ready is False
+
+
+@pytest.mark.parametrize(
+    "status, exc",
+    [
+        (400, errors.BadRequestError),
+        (401, errors.UnauthorizedError),
+        (403, errors.ForbiddenError),
+        (404, errors.NotFoundError),
+        (405, errors.MethodNotAllowedError),
+        (409, errors.ConflictError),
+        (415, errors.UnsupportedMediaTypeError),
+        (500, errors.ServerError),
+        (503, errors.ServerError),
+        (418, errors.ApiError),
+    ],
+)
+async def test_status_maps_to_exception(status, exc):
+    transport = make_transport(lambda _: httpx.Response(status, text="boom"))
+
+    with pytest.raises(exc) as info:
+        await transport._get("https://donatex.gg/api/v1/x")
+
+    assert type(info.value) is exc
+    assert info.value.status_code == status
+
+
+async def test_empty_body_gets_default_message():
+    transport = make_transport(lambda _: httpx.Response(401))
+
+    with pytest.raises(errors.UnauthorizedError) as info:
+        await transport._get("https://donatex.gg/api/v1/x")
+
+    assert str(info.value)
+
+
+async def test_problem_details_populates_errors_and_trace_id():
+    body = {
+        "title": "One or more validation errors occurred.",
+        "status": 400,
+        "errors": {"take": ["The value 'abc' is not valid."]},
+        "traceId": "00-abc",
+    }
+    transport = make_transport(lambda _: httpx.Response(400, json=body))
+
+    with pytest.raises(errors.BadRequestError) as info:
+        await transport._get("https://donatex.gg/api/v1/x")
+
+    assert info.value.errors == {"take": ["The value 'abc' is not valid."]}
+    assert info.value.trace_id == "00-abc"
+    assert "take" in str(info.value)
+
+
+async def test_429_carries_retry_after_and_error_message():
+    transport = make_transport(
+        lambda _: httpx.Response(429, json={"error": "slow down"}, headers={"Retry-After": "7"})
+    )
+
+    with pytest.raises(errors.FloodWaitError) as info:
+        await transport._post("https://donatex.gg/api/v1/x")
+
+    assert info.value.retry_after == 7
+    assert str(info.value) == "slow down"
+    assert info.value.status_code == 429
+
+
+async def test_429_without_retry_after_defaults_to_one_second():
+    transport = make_transport(lambda _: httpx.Response(429, json={"error": "x"}))
+
+    with pytest.raises(errors.FloodWaitError) as info:
+        await transport._delete("https://donatex.gg/api/v1/x")
+
+    assert info.value.retry_after == 1.0
